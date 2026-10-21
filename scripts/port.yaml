@@ -1,0 +1,4 @@
+left_follower: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6081735-if00
+left_leader: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14112470-if00
+right_follower: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A057166-if00
+right_leader: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14112901-if00

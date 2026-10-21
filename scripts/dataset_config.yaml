@@ -1,0 +1,11 @@
+num_episodes: 20                                              # number of episodes you want to record
+single_task: Grasp the blue cylinder                           # task description for training
+hf_user: Suyash44                                              # your HuggingFace username
+setup: full insertion board                                    # physical setup description (used in analysis Excel)
+object: blue cylinder                                          # target object (used in analysis Excel)
+repo: rollout_groot_blue_cylinder_20ksteps_30fps_20eps # HuggingFace dataset repo name
+model_name: groot_20ksteps_30fps                                     # human-readable model label used in Excel analysis
+push_to_hub: True
+episode_time_s: 30                                             # seconds per episode
+reset_time_s: 10                                               # seconds to reset between episodes
+inference_fps: 30                                             # inference loop FPS (lower if CPU/GPU starvation warnings)

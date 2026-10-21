@@ -1,0 +1,48 @@
+# Python environments and cache
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Datasets and downloaded Hugging Face files
+merged_dataset/
+data/
+datasets/
+_hf_download_*/
+annotations/
+merged_csv/
+
+# Training outputs and models
+outputs/
+checkpoints/
+runs/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# Videos and analysis files
+*.mp4
+*.avi
+*.mkv
+*.xlsx
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+
+# IDE files
+.idea/
+.vscode/
+
+# Temporary editor files
+.~lock.*
+*.swp
+*~
