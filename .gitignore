@@ -46,3 +46,6 @@ runs/
 .~lock.*
 *.swp
 *~
+
+# Local backup files
+*.backup

@@ -24,12 +24,12 @@ RUN python3.12 -m pip install --no-cache-dir -e ".[groot]"
 # SageMaker L40S (sm_89) NVRTC workaround: integer reductions have no precompiled
 # kernel, triggering NVRTC JIT which fails due to missing libnvrtc-builtins.so.13.0.
 # This module monkey-patches ALL integer reduction ops to use CPU instead.
-COPY docker/groot-sagemaker/nvrtc_workaround.py /opt/nvrtc_workaround.py
+COPY docker/groot/nvrtc_workaround.py /opt/nvrtc_workaround.py
 RUN SITE=$(python3.12 -c "import site; print(site.getsitepackages()[0])") && \
     cp /opt/nvrtc_workaround.py "$SITE/nvrtc_workaround.py" && \
     echo "import nvrtc_workaround" > "$SITE/nvrtc_workaround.pth"
 
-COPY docker/groot-sagemaker/train.sh /opt/train.sh
+COPY docker/groot/train.sh /opt/train.sh
 RUN chmod +x /opt/train.sh
 
 ENTRYPOINT ["/opt/train.sh"]

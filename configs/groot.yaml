@@ -1,0 +1,9 @@
+model_type: groot
+base_model: nvidia/GR00T-N1.7-3B
+dockerfile: docker/groot/Dockerfile
+ecr_repository: robotics-groot
+instance_type: ml.g6e.xlarge
+steps: 20000
+batch_size: 2
+save_freq: 5000
+embodiment_tag: new_embodiment
