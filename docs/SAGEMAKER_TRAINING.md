@@ -3,7 +3,7 @@
 **Models:** NVIDIA GR00T N1.7 and Hugging Face SmolVLA
 **Workflow:** Select a model and dataset → build its Docker image → publish to Amazon ECR → submit a SageMaker training job → inspect checkpoints and results in Amazon S3.
 
-> **Validation status:** This is an implementation and operator guide, **not a claim that either model has successfully trained in SageMaker**. Python/Bash syntax and some GR00T launcher dry-run checks were performed during development. The Docker image builds, pretrained-model compatibility, dataset schemas, GPU memory requirements, and end-to-end SageMaker execution still need validation by the first operator. Do not skip the dry run and preflight review.
+> **Validation status:** GR00T N1.7 fine-tuning on SageMaker has been validated end-to-end. SmolVLA uses the same launcher and container pattern but has not yet completed an end-to-end SageMaker run. Do not skip the dry run and preflight review for either model.
 
 ## 1. Repository layout
 
@@ -28,7 +28,7 @@
 └── vendor/lerobot/
 ```
 
-GR00T and SmolVLA use **separate images** to isolate dependencies. Both are launched with the **same** `scripts/jobs/sagemaker/launch_training.py` script. The legacy `launch_groot_training.py`, if present, is not used by this guide.
+GR00T and SmolVLA use **separate images** to isolate dependencies. Both are launched with the **same** `scripts/jobs/sagemaker/launch_training.py` script.
 
 ## 2. Prerequisites and access
 
@@ -41,16 +41,15 @@ On the **colleague's machine**, install:
 
 The AWS identity used by the operator needs permission to use **SageMaker Training Jobs**, **Amazon ECR**, **Amazon S3**, and to pass the approved **SageMaker execution role** (`iam:PassRole`). The execution role itself needs ECR image pull, S3 write permissions, and any other resources used by the training job. The selected GPU instance must be offered in the AWS Region and the account must have adequate SageMaker quota.
 
-You also need access to the chosen Hugging Face dataset and pretrained model. Public datasets/models are easiest for the first test. Private or gated resources require a separate, approved secret-delivery design; **this repository does not yet implement that**.
+You also need a HuggingFace account and a token with **read access** to the dataset and pretrained model repositories you plan to use.
 
 All example account settings below reflect the project's current environment. Colleagues in different AWS accounts must replace them with their own approved values.
 
 ## 3. Clone and install launcher dependencies
 
 ```bash
-# Use the approved GitHub repository and access method.
-git clone git@github.com:suyashsingh-ovsr/groot-sagemaker-training.git
-cd groot-sagemaker-training
+git clone git@github.com:suyashsingh-ovsr/aws-sagemaker-vla-training.git
+cd aws-sagemaker-vla-training
 
 # The launcher runs on your computer; the model runs in the Docker container on SageMaker.
 python3 -m venv .venv
@@ -83,7 +82,8 @@ You can edit these defaults in your own branch, **or override them per job** wit
 | Option | Meaning | Example |
 |---|---|---|
 | `--model-type` | Which container/policy to run | `groot`, `smolvla` |
-| `--dataset-repo-id` | Hugging Face dataset repository | `ORG/ROBOT_DATASET` |
+| `--dataset-repo-id` | HuggingFace dataset repository (prompted if omitted) | `ORG/ROBOT_DATASET` |
+| `--hf-token` | HuggingFace token for private/gated access (prompted if omitted) | `hf_...` |
 | `--base-model` | Starting pretrained policy | `nvidia/GR00T-N1.7-3B` |
 | `--steps` | Training update steps | `10000` |
 | `--batch-size` | Training batch size | `2` |
@@ -111,7 +111,7 @@ You can edit these defaults in your own branch, **or override them per job** wit
 
 Docker builds **must be run from the repository root**: both Dockerfiles copy `vendor/lerobot/` into the image. The GR00T Dockerfile also installs `nvrtc_workaround.py`. The image's entrypoint reads the variables produced by the SageMaker launcher.
 
-The SmolVLA entrypoint is intended to load a pretrained policy with `--policy.path=<repo>`. The GR00T entrypoint is intended to use `--policy.type=groot` with a base model and embodiment tag. **Model-specific argument compatibility still needs to be confirmed against the exact vendored LeRobot version before the first paid training run.**
+The SmolVLA entrypoint loads a pretrained policy with `--policy.path=<repo>`. The GR00T entrypoint uses `--policy.type=groot` with a base model and embodiment tag.
 
 ## 7. Build the selected Docker image (only when ready to train)
 
@@ -127,7 +127,7 @@ docker build -f docker/groot/Dockerfile -t robotics-groot:v1 .
 docker build -f docker/smolvla/Dockerfile -t robotics-smolvla:v1 .
 ```
 
-Only build the model you intend to use. Building may download several GB and take a long time. If a build fails, diagnose the specific failed layer before uploading or launching anything. **Neither Dockerfile is currently certified as successfully built.**
+Only build the model you intend to use. Building may download several GB and take a long time. If a build fails, diagnose the specific failed layer before uploading or launching anything. **The GR00T Dockerfile has been validated. The SmolVLA Dockerfile has not yet been built and run end-to-end on SageMaker.**
 
 ## 8. Create the ECR repositories, authenticate, and push
 
@@ -164,7 +164,7 @@ Use `robotics-smolvla` in the verification command for SmolVLA.
 
 ## 9. Dry-run the SageMaker job configuration
 
-A dry run displays the exact `CreateTrainingJob` request without calling SageMaker. **Always inspect** its `TrainingImage`, `RoleArn`, `InstanceType`, `Environment`, `CheckpointConfig`, and S3 output path.
+A dry run displays the exact `CreateTrainingJob` request without calling SageMaker. **Always inspect** its `TrainingImage`, `RoleArn`, `InstanceType`, `Environment`, `CheckpointConfig`, and S3 output path. The token is redacted in the printed output.
 
 **GR00T:**
 
@@ -172,6 +172,7 @@ A dry run displays the exact `CreateTrainingJob` request without calling SageMak
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
   --model-type groot \
   --dataset-repo-id ORG/COMPATIBLE_GROOT_DATASET \
+  --hf-token hf_YOUR_TOKEN \
   --steps 10000 \
   --batch-size 2 \
   --save-freq 5000 \
@@ -184,13 +185,16 @@ A dry run displays the exact `CreateTrainingJob` request without calling SageMak
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
   --model-type smolvla \
   --dataset-repo-id ORG/COMPATIBLE_SMOLVLA_DATASET \
+  --hf-token hf_YOUR_TOKEN \
   --steps 10000 \
   --batch-size 2 \
   --save-freq 2000 \
   --dry-run
 ```
 
-If using a different approved ECR image, add `--ecr-image FULL_ECR_URI`. For a different AWS account or role, add `--aws-account-id`, `--role-arn`, `--aws-profile`, `--aws-region` and `--s3-bucket` as required. Do not assume the configuration's default GPU is sufficient for every experiment.
+If `--dataset-repo-id` or `--hf-token` are omitted, the launcher will prompt for them interactively. The token prompt uses silent input (no echo). You can also pre-set them as environment variables `HF_TOKEN` and (less commonly) pass `--dataset-repo-id`.
+
+If using a different approved ECR image, add `--ecr-image FULL_ECR_URI`. For a different AWS account or role, add `--aws-account-id`, `--role-arn`, `--aws-profile`, `--aws-region` and `--s3-bucket` as required.
 
 ## 10. Launch training on SageMaker
 
@@ -200,10 +204,10 @@ Once the following have been verified, **remove `--dry-run`** from the relevant 
 2. The account, region, role, bucket and ECR image URI are correct.
 3. The operator has permission to create jobs and pass the training role.
 4. The chosen instance type has sufficient quota, memory and expected budget.
-5. The base model and dataset are accessible and compatible.
+5. The base model and dataset are accessible with the provided token.
 6. The model-specific training arguments were checked against vendored LeRobot.
 
-For example, after substituting a compatible dataset:
+For example:
 
 ```bash
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
@@ -211,6 +215,7 @@ For example, after substituting a compatible dataset:
   --dataset-repo-id ORG/COMPATIBLE_GROOT_DATASET \
   --steps 10000 \
   --batch-size 2
+# Token will be prompted securely if HF_TOKEN env var is not set.
 ```
 
 The launcher prints the job name and ARN after AWS accepts the request. **Submitting a job does not mean training has succeeded.** Inspect SageMaker job status and CloudWatch logs, and review errors if the container exits.
@@ -228,11 +233,15 @@ SageMaker's `CheckpointConfig` synchronizes files from `/opt/ml/checkpoints` to 
 
 **Automatic training resume from a prior SageMaker job is not implemented in the shared launcher.** An S3 checkpoint backup is not the same as verified resume support. Do not promise automatic recovery from interruptions until this has been added and tested.
 
-## 12. Hugging Face access and secrets
+## 12. HuggingFace access and secrets
 
-The training scripts fetch the dataset and pretrained model using Hugging Face repository IDs. This is practical for **public and accessible** repositories. **Private and gated access is not yet implemented in this template.** Do not commit API keys, Hugging Face tokens, AWS access keys or `.env` files to Git, and do not pass secrets through the launcher or `CreateTrainingJob.Environment` without an approved secure mechanism.
+The launcher passes `HF_TOKEN` as an environment variable to the SageMaker training container. Inside the container, both `train.sh` scripts export it as `HUGGING_FACE_HUB_TOKEN`, which LeRobot and the HuggingFace Hub SDK use for authentication.
 
-`PUSH_TO_HUB` is disabled in the shared launcher. A policy repository ID does **not** authorize a Hub upload by itself; final outputs are saved to S3.
+**Security note:** SageMaker passes `Environment` variables in plaintext in the `CreateTrainingJob` API call and stores them in the job definition. They are visible to anyone with `sagemaker:DescribeTrainingJob` permission on the job. For production use, consider replacing this with AWS Secrets Manager and fetching the token inside the container at startup. For team use on a private account, the current approach is acceptable.
+
+- Do **not** commit tokens, `.env` files, or AWS credentials to Git.
+- Pass `--hf-token` on the command line or set the `HF_TOKEN` environment variable before running the launcher.
+- `PUSH_TO_HUB` is disabled. Final outputs are saved to S3 only.
 
 ## 13. Common problems
 
@@ -242,7 +251,7 @@ The training scripts fetch the dataset and pretrained model using Hugging Face r
 | ECR image not found | Verify account, region, repository and tag; confirm the image was pushed |
 | `AccessDenied` / role errors | AWS SSO session, SageMaker permissions, ECR/S3 role policies, `iam:PassRole` |
 | SageMaker instance unavailable | Region availability and SageMaker training instance quota |
-| Hugging Face 401/403 | Dataset/model visibility and authentication; private models are not yet supported |
+| HuggingFace 401/403 | Token is missing, expired, or lacks read access to the dataset/model repo |
 | LeRobot argument/configuration error | Check the vendored LeRobot API and model-specific `train.sh` |
 | CUDA OOM | Reduce batch size, choose a larger GPU or adjust model-specific settings |
 | Missing checkpoints | Check actual model output path, checkpoint creation and SageMaker sync logs |

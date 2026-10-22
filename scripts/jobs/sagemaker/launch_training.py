@@ -1,12 +1,13 @@
-
 #!/usr/bin/env python3
 """Shared AWS SageMaker launcher for GR00T and SmolVLA."""
 
 import argparse
 import datetime
+import getpass
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -33,6 +34,20 @@ def load_config(model_type):
         return yaml.safe_load(file)
 
 
+def prompt_required(prompt_text, env_var=None, secret=False):
+    """Return value from env var, or interactively prompt if missing."""
+    if env_var:
+        value = os.getenv(env_var, "").strip()
+        if value:
+            return value
+    read_fn = getpass.getpass if secret else input
+    while True:
+        value = read_fn(prompt_text).strip()
+        if value:
+            return value
+        print("Value is required.", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Parameterized VLA training on AWS SageMaker"
@@ -43,7 +58,16 @@ def main():
         choices=["groot", "smolvla"],
         required=True,
     )
-    parser.add_argument("--dataset-repo-id", required=True)
+    parser.add_argument(
+        "--dataset-repo-id",
+        default=None,
+        help="HuggingFace dataset repo (prompted if omitted)",
+    )
+    parser.add_argument(
+        "--hf-token",
+        default=os.getenv("HF_TOKEN", ""),
+        help="HuggingFace token for private/gated datasets (prompted if omitted)",
+    )
     parser.add_argument("--base-model")
     parser.add_argument("--hf-policy-repo")
     parser.add_argument("--steps", type=positive_int)
@@ -93,6 +117,18 @@ def main():
     args = parser.parse_args()
     config = load_config(args.model_type)
 
+    # Interactive prompts for required values not supplied on the command line.
+    if not args.dataset_repo_id:
+        args.dataset_repo_id = prompt_required(
+            "HuggingFace dataset repo ID (e.g. ORG/DATASET_NAME): "
+        )
+
+    if not args.hf_token:
+        args.hf_token = prompt_required(
+            "HuggingFace token (hf_...): ",
+            secret=True,
+        )
+
     prefix = args.job_prefix or f"vla-{args.model_type}"
     prefix = re.sub(
         r"[^a-zA-Z0-9-]+", "-", prefix
@@ -128,6 +164,7 @@ def main():
         ),
         "OUTPUT_DIR": "/opt/ml/checkpoints/output",
         "PUSH_TO_HUB": "false",
+        "HF_TOKEN": args.hf_token,
     }
 
     if args.hf_policy_repo:
@@ -172,8 +209,13 @@ def main():
         "Environment": environment,
     }
 
+    # Redact token in printed config so it is not visible in logs.
+    display_job = json.loads(json.dumps(job))
+    if display_job.get("Environment", {}).get("HF_TOKEN"):
+        display_job["Environment"]["HF_TOKEN"] = "hf_***"
+
     print("\nSageMaker training configuration:")
-    print(json.dumps(job, indent=2))
+    print(json.dumps(display_job, indent=2))
 
     if args.dry_run:
         print("\nDRY RUN: No AWS training job created.")
