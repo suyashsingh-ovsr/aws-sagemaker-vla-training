@@ -10,6 +10,7 @@ __pycache__/
 merged_dataset/
 data/
 datasets/
+!vendor/**/datasets/
 _hf_download_*/
 annotations/
 merged_csv/
