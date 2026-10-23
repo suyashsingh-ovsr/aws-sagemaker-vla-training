@@ -258,7 +258,7 @@ The launcher passes `HF_TOKEN` as an environment variable to the SageMaker train
 
 - Do **not** commit tokens, `.env` files, or AWS credentials to Git.
 - Pass `--hf-token` on the command line or set the `HF_TOKEN` environment variable before running the launcher.
-- `PUSH_TO_HUB` is disabled by default. Final outputs are saved to S3 only.
+- `PUSH_TO_HUB` is enabled by default. Pass `--hf-policy-repo ORG/MODEL_NAME` to set the destination repository.
 
 ## 13. Common problems
 

@@ -163,7 +163,7 @@ def main():
             args.save_freq or config["save_freq"]
         ),
         "OUTPUT_DIR": "/opt/ml/checkpoints/output",
-        "PUSH_TO_HUB": "false",
+        "PUSH_TO_HUB": "true",
         "HF_TOKEN": args.hf_token,
     }
 
