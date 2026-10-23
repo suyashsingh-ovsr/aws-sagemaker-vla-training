@@ -129,6 +129,11 @@ def main():
             secret=True,
         )
 
+    if not args.hf_policy_repo:
+        args.hf_policy_repo = prompt_required(
+            "HuggingFace policy repo to push checkpoints to (e.g. ORG/MODEL_NAME): "
+        )
+
     prefix = args.job_prefix or f"vla-{args.model_type}"
     prefix = re.sub(
         r"[^a-zA-Z0-9-]+", "-", prefix

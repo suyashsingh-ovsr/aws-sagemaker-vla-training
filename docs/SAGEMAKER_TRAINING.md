@@ -188,8 +188,9 @@ A dry run displays the exact `CreateTrainingJob` request without calling SageMak
 ```bash
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
   --model-type groot \
-  --dataset-repo-id ORG/COMPATIBLE_GROOT_DATASET \
+  --dataset-repo-id ORG/GROOT_DATASET \
   --hf-token hf_YOUR_TOKEN \
+  --hf-policy-repo ORG/MODEL_NAME \
   --steps 10000 \
   --batch-size 2 \
   --save-freq 5000 \
@@ -201,15 +202,16 @@ A dry run displays the exact `CreateTrainingJob` request without calling SageMak
 ```bash
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
   --model-type smolvla \
-  --dataset-repo-id ORG/COMPATIBLE_SMOLVLA_DATASET \
+  --dataset-repo-id ORG/SMOLVLA_DATASET \
   --hf-token hf_YOUR_TOKEN \
+  --hf-policy-repo ORG/MODEL_NAME \
   --steps 10000 \
   --batch-size 2 \
   --save-freq 2000 \
   --dry-run
 ```
 
-If `--dataset-repo-id` or `--hf-token` are omitted, the launcher will prompt for them interactively. The token prompt uses silent input (no echo). You can also pre-set the token as the `HF_TOKEN` environment variable.
+If `--dataset-repo-id`, `--hf-token`, or `--hf-policy-repo` are omitted, the launcher will prompt for them interactively. The token prompt uses silent input (no echo). You can also pre-set the token as the `HF_TOKEN` environment variable.
 
 If using a different approved ECR image, add `--ecr-image FULL_ECR_URI`. For a different AWS account or role, add `--aws-account-id`, `--role-arn`, `--aws-profile`, `--aws-region`, and `--s3-bucket` as required.
 
@@ -226,13 +228,28 @@ Once the following have been verified, **remove `--dry-run`** from the relevant 
 
 For example:
 
+**GR00T:**
+
 ```bash
 .venv/bin/python scripts/jobs/sagemaker/launch_training.py \
   --model-type groot \
-  --dataset-repo-id ORG/COMPATIBLE_GROOT_DATASET \
+  --dataset-repo-id ORG/GROOT_DATASET \
+  --hf-policy-repo ORG/MODEL_NAME \
   --steps 10000 \
   --batch-size 2
-# Token will be prompted securely if HF_TOKEN env var is not set.
+# --hf-token and --hf-policy-repo will be prompted if not set.
+```
+
+**SmolVLA:**
+
+```bash
+.venv/bin/python scripts/jobs/sagemaker/launch_training.py \
+  --model-type smolvla \
+  --dataset-repo-id ORG/SMOLVLA_DATASET \
+  --hf-policy-repo ORG/MODEL_NAME \
+  --steps 10000 \
+  --batch-size 2
+# --hf-token and --hf-policy-repo will be prompted if not set.
 ```
 
 The launcher prints the job name and ARN after AWS accepts the request. **Submitting a job does not mean training has succeeded.** Inspect SageMaker job status and CloudWatch logs, and review errors if the container exits.
