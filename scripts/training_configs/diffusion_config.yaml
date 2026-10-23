@@ -1,6 +1,0 @@
-# Diffusion Policy training configuration
-output_dir: ./outputs/diffusion
-steps: 10000
-batch_size: 32
-save_freq: 1000
-# Add diffusion-specific params as needed

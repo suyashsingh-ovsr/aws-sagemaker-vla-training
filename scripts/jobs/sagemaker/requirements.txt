@@ -1,2 +1,4 @@
+# Dependencies for the SageMaker training job launcher (launch_training.py).
+# These run on the operator's machine only, not inside the training container.
 boto3>=1.35,<2
 PyYAML>=6.0,<7

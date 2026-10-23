@@ -1,7 +1,7 @@
 # Multi-model VLA training on AWS SageMaker
 
 **Models:** NVIDIA GR00T N1.7 and Hugging Face SmolVLA
-**Workflow:** Select a model and dataset → build its Docker image → publish to Amazon ECR → submit a SageMaker training job → inspect checkpoints and results in Amazon S3.
+**Workflow:** Select a model and dataset, build its Docker image, publish to Amazon ECR, submit a SageMaker training job, inspect checkpoints and results in Amazon S3.
 
 > **Validation status:** GR00T N1.7 fine-tuning on SageMaker has been validated end-to-end. SmolVLA uses the same launcher and container pattern but has not yet completed an end-to-end SageMaker run. Do not skip the dry run and preflight review for either model.
 
@@ -12,10 +12,12 @@
 ├── docker/
 │   ├── groot/
 │   │   ├── Dockerfile
+│   │   ├── pyproject.toml
 │   │   ├── train.sh
 │   │   └── nvrtc_workaround.py
 │   └── smolvla/
 │       ├── Dockerfile
+│       ├── pyproject.toml
 │       └── train.sh
 ├── configs/
 │   ├── groot.yaml
@@ -23,21 +25,20 @@
 ├── scripts/jobs/sagemaker/
 │   ├── launch_training.py
 │   └── requirements.txt
-├── docs/
-│   └── SAGEMAKER_TRAINING.md
-└── vendor/lerobot/
+└── docs/
+    └── SAGEMAKER_TRAINING.md
 ```
 
-GR00T and SmolVLA use **separate images** to isolate dependencies. Both are launched with the **same** `scripts/jobs/sagemaker/launch_training.py` script.
+GR00T and SmolVLA use **separate images** to isolate dependencies. Each image has its own `pyproject.toml` defining training dependencies, installed with [uv](https://docs.astral.sh/uv/) at build time. Both install [LeRobot v0.6.1](https://github.com/huggingface/lerobot/tree/v0.6.1) from GitHub. Both are launched with the **same** `scripts/jobs/sagemaker/launch_training.py` script.
 
 ## 2. Prerequisites and access
 
-On the **colleague's machine**, install:
+On the operator's machine, install:
 
 - Git
 - Docker Engine with enough free disk space for a CUDA/PyTorch image
 - AWS CLI v2, configured for AWS IAM Identity Center (SSO) or other approved credentials
-- Python 3 and `venv`/`pip` for the **launcher only**
+- Python 3 and `venv`/`pip` for the launcher only
 
 The AWS identity used by the operator needs permission to use **SageMaker Training Jobs**, **Amazon ECR**, **Amazon S3**, and to pass the approved **SageMaker execution role** (`iam:PassRole`). The execution role itself needs ECR image pull, S3 write permissions, and any other resources used by the training job. The selected GPU instance must be offered in the AWS Region and the account must have adequate SageMaker quota.
 
@@ -48,8 +49,8 @@ All example account settings below reflect the project's current environment. Co
 ## 3. Clone and install launcher dependencies
 
 ```bash
-git clone git@github.com:suyashsingh-ovsr/aws-sagemaker-vla-training.git
-cd aws-sagemaker-vla-training
+git clone git@github.com:suyashsingh-ovsr/vla-training.git
+cd vla-training
 
 # The launcher runs on your computer; the model runs in the Docker container on SageMaker.
 python3 -m venv .venv
@@ -68,34 +69,37 @@ aws sts get-caller-identity --profile datascience
 aws configure get region --profile datascience
 ```
 
-Check the reported AWS account ID against the account you're authorized to use. The current launcher defaults to account `339879234866`, region `eu-north-1`, a role named `SageMakerExecutionRole`, and S3 bucket `oversonic-groot-training`. **These are defaults, not universally valid settings.** Supply overrides as appropriate.
+Check the reported AWS account ID against the account you are authorized to use. The current launcher defaults to account `339879234866`, region `eu-north-1`, a role named `SageMakerExecutionRole`, and S3 bucket `oversonic-groot-training`. **These are defaults, not universally valid settings.** Supply overrides as appropriate.
 
 ## 5. Choose your model and dataset
 
 The model-specific defaults live in:
 
-- `configs/groot.yaml` — GR00T base model, Docker path, ECR repository, instance, steps, batch size, checkpoint frequency, embodiment tag.
-- `configs/smolvla.yaml` — SmolVLA base model, Docker path, ECR repository, instance, steps, batch size, checkpoint frequency.
+- `configs/groot.yaml` -- GR00T base model, Docker path, ECR repository, instance, steps, batch size, checkpoint frequency, embodiment tag.
+- `configs/smolvla.yaml` -- SmolVLA base model, Docker path, ECR repository, instance, steps, batch size, checkpoint frequency.
 
 You can edit these defaults in your own branch, **or override them per job** with command-line options. Prefer command-line overrides for experiments so that the shared defaults stay consistent.
 
 | Option | Meaning | Example |
 |---|---|---|
-| `--model-type` | Which container/policy to run | `groot`, `smolvla` |
+| `--model-type` | Which container and policy to run | `groot`, `smolvla` |
 | `--dataset-repo-id` | HuggingFace dataset repository (prompted if omitted) | `ORG/ROBOT_DATASET` |
-| `--hf-token` | HuggingFace token for private/gated access (prompted if omitted) | `hf_...` |
+| `--hf-token` | HuggingFace token for private or gated access (prompted if omitted) | `hf_...` |
 | `--base-model` | Starting pretrained policy | `nvidia/GR00T-N1.7-3B` |
 | `--steps` | Training update steps | `10000` |
 | `--batch-size` | Training batch size | `2` |
 | `--save-freq` | Checkpoint interval in steps | `2000` |
 | `--instance-type` | SageMaker training GPU instance | `ml.g6e.xlarge` |
 | `--embodiment-tag` | GR00T embodiment tag | `new_embodiment` |
-| `--hf-policy-repo` | Policy repository identifier (not an upload token) | `ORG/MODEL_NAME` |
+| `--hf-policy-repo` | Policy repository identifier | `ORG/MODEL_NAME` |
 | `--ecr-image` | Full ECR image URI override | `ACCOUNT.dkr.ecr.REGION.amazonaws.com/robotics-groot:v1` |
-| `--aws-profile`, `--aws-region`, `--aws-account-id` | AWS identity and destination | `datascience`, `eu-north-1`, `ACCOUNT_ID` |
-| `--role-arn`, `--s3-bucket` | Training role and storage | Approved role ARN, bucket name |
+| `--aws-profile` | AWS CLI profile name | `datascience` |
+| `--aws-region` | AWS Region for SageMaker and ECR | `eu-north-1` |
+| `--aws-account-id` | AWS account ID | `339879234866` |
+| `--role-arn` | SageMaker execution role ARN | `arn:aws:iam::ACCOUNT:role/SageMakerExecutionRole` |
+| `--s3-bucket` | S3 bucket for output and checkpoints | `oversonic-groot-training` |
 | `--image-tag` | Image tag, if using default image URI construction | `v1` |
-| `--job-prefix` | SageMaker job prefix | `vla-groot-test` |
+| `--job-prefix` | SageMaker job name prefix | `vla-groot-test` |
 | `--volume-size` | SageMaker storage allocation in GB | `100` |
 | `--max-runtime-hours` | Job runtime limit | `8` |
 | `--dry-run` | Print configuration; do **not** create a job | Flag |
@@ -109,7 +113,7 @@ You can edit these defaults in your own branch, **or override them per job** wit
 | GR00T | `docker/groot/Dockerfile` | `docker/groot/train.sh` |
 | SmolVLA | `docker/smolvla/Dockerfile` | `docker/smolvla/train.sh` |
 
-Docker builds **must be run from the repository root**: both Dockerfiles copy `vendor/lerobot/` into the image. The GR00T Dockerfile also installs `nvrtc_workaround.py`. The image's entrypoint reads the variables produced by the SageMaker launcher.
+Docker builds **must be run from the repository root**. Each Dockerfile copies its `pyproject.toml` and runs `uv sync` to install dependencies. The GR00T Dockerfile also installs `nvrtc_workaround.py`. The image entrypoint reads the variables produced by the SageMaker launcher.
 
 The SmolVLA entrypoint loads a pretrained policy with `--policy.path=<repo>`. The GR00T entrypoint uses `--policy.type=groot` with a base model and embodiment tag.
 
@@ -127,7 +131,7 @@ docker build -f docker/groot/Dockerfile -t robotics-groot:v1 .
 docker build -f docker/smolvla/Dockerfile -t robotics-smolvla:v1 .
 ```
 
-Only build the model you intend to use. Building may download several GB and take a long time. If a build fails, diagnose the specific failed layer before uploading or launching anything. **The GR00T Dockerfile has been validated. The SmolVLA Dockerfile has not yet been built and run end-to-end on SageMaker.**
+Only build the model you intend to use. Building may download several GB and take a long time. If a build fails, diagnose the specific failed layer before uploading or launching anything.
 
 ## 8. Create the ECR repositories, authenticate, and push
 
@@ -139,28 +143,41 @@ export REGION=eu-north-1
 export ACCOUNT=$(aws sts get-caller-identity --profile "$PROFILE" --query Account --output text)
 export REGISTRY="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
 
-# Create the selected repository if it does not already exist.
-# For GR00T:
-aws ecr describe-repositories --repository-names robotics-groot --profile "$PROFILE" --region "$REGION" \
-  || aws ecr create-repository --repository-name robotics-groot --profile "$PROFILE" --region "$REGION"
-
 aws ecr get-login-password --profile "$PROFILE" --region "$REGION" \
   | docker login --username AWS --password-stdin "$REGISTRY"
+```
+
+**GR00T:**
+
+```bash
+aws ecr describe-repositories --repository-names robotics-groot --profile "$PROFILE" --region "$REGION" \
+  || aws ecr create-repository --repository-name robotics-groot --profile "$PROFILE" --region "$REGION"
 
 docker tag robotics-groot:v1 "$REGISTRY/robotics-groot:v1"
 docker push "$REGISTRY/robotics-groot:v1"
 ```
 
-For **SmolVLA**, perform the corresponding operation with `robotics-smolvla`, and tag/push `robotics-smolvla:v1`. If your organization already maintains approved ECR repositories, use those and pass their full image URI through `--ecr-image` instead of creating new repositories.
+**SmolVLA:**
+
+```bash
+aws ecr describe-repositories --repository-names robotics-smolvla --profile "$PROFILE" --region "$REGION" \
+  || aws ecr create-repository --repository-name robotics-smolvla --profile "$PROFILE" --region "$REGION"
+
+docker tag robotics-smolvla:v1 "$REGISTRY/robotics-smolvla:v1"
+docker push "$REGISTRY/robotics-smolvla:v1"
+```
+
+If your organization already maintains approved ECR repositories, use those and pass their full image URI through `--ecr-image` instead of creating new repositories.
 
 Verify that the tag exists:
 
 ```bash
 aws ecr describe-images --repository-name robotics-groot --image-ids imageTag=v1 \
   --profile "$PROFILE" --region "$REGION"
-```
 
-Use `robotics-smolvla` in the verification command for SmolVLA.
+aws ecr describe-images --repository-name robotics-smolvla --image-ids imageTag=v1 \
+  --profile "$PROFILE" --region "$REGION"
+```
 
 ## 9. Dry-run the SageMaker job configuration
 
@@ -192,20 +209,20 @@ A dry run displays the exact `CreateTrainingJob` request without calling SageMak
   --dry-run
 ```
 
-If `--dataset-repo-id` or `--hf-token` are omitted, the launcher will prompt for them interactively. The token prompt uses silent input (no echo). You can also pre-set them as environment variables `HF_TOKEN` and (less commonly) pass `--dataset-repo-id`.
+If `--dataset-repo-id` or `--hf-token` are omitted, the launcher will prompt for them interactively. The token prompt uses silent input (no echo). You can also pre-set the token as the `HF_TOKEN` environment variable.
 
-If using a different approved ECR image, add `--ecr-image FULL_ECR_URI`. For a different AWS account or role, add `--aws-account-id`, `--role-arn`, `--aws-profile`, `--aws-region` and `--s3-bucket` as required.
+If using a different approved ECR image, add `--ecr-image FULL_ECR_URI`. For a different AWS account or role, add `--aws-account-id`, `--role-arn`, `--aws-profile`, `--aws-region`, and `--s3-bucket` as required.
 
 ## 10. Launch training on SageMaker
 
 Once the following have been verified, **remove `--dry-run`** from the relevant command:
 
 1. The Docker build succeeded and its exact tag exists in ECR.
-2. The account, region, role, bucket and ECR image URI are correct.
+2. The account, region, role, bucket, and ECR image URI are correct.
 3. The operator has permission to create jobs and pass the training role.
-4. The chosen instance type has sufficient quota, memory and expected budget.
+4. The chosen instance type has sufficient quota, memory, and expected budget.
 5. The base model and dataset are accessible with the provided token.
-6. The model-specific training arguments were checked against vendored LeRobot.
+6. The model-specific training arguments were checked against LeRobot v0.6.1.
 
 For example:
 
@@ -222,7 +239,7 @@ The launcher prints the job name and ARN after AWS accepts the request. **Submit
 
 ## 11. Checkpoints and final artifacts
 
-Both training scripts currently use these paths:
+Both training scripts use these paths:
 
 | Purpose | Container location | AWS destination |
 |---|---|---|
@@ -241,31 +258,31 @@ The launcher passes `HF_TOKEN` as an environment variable to the SageMaker train
 
 - Do **not** commit tokens, `.env` files, or AWS credentials to Git.
 - Pass `--hf-token` on the command line or set the `HF_TOKEN` environment variable before running the launcher.
-- `PUSH_TO_HUB` is disabled. Final outputs are saved to S3 only.
+- `PUSH_TO_HUB` is disabled by default. Final outputs are saved to S3 only.
 
 ## 13. Common problems
 
 | Symptom | Check |
 |---|---|
-| `No module named yaml` or `boto3` | Install `scripts/jobs/sagemaker/requirements.txt` inside the launcher's virtualenv |
-| ECR image not found | Verify account, region, repository and tag; confirm the image was pushed |
-| `AccessDenied` / role errors | AWS SSO session, SageMaker permissions, ECR/S3 role policies, `iam:PassRole` |
+| `No module named yaml` or `boto3` | Install `scripts/jobs/sagemaker/requirements.txt` inside the launcher virtualenv |
+| ECR image not found | Verify account, region, repository, and tag; confirm the image was pushed |
+| `AccessDenied` or role errors | AWS SSO session, SageMaker permissions, ECR/S3 role policies, `iam:PassRole` |
 | SageMaker instance unavailable | Region availability and SageMaker training instance quota |
-| HuggingFace 401/403 | Token is missing, expired, or lacks read access to the dataset/model repo |
-| LeRobot argument/configuration error | Check the vendored LeRobot API and model-specific `train.sh` |
-| CUDA OOM | Reduce batch size, choose a larger GPU or adjust model-specific settings |
-| Missing checkpoints | Check actual model output path, checkpoint creation and SageMaker sync logs |
-| No final `model.tar.gz` | Inspect job status, errors, runtime and `/opt/ml/model` contents |
-| Job costs unexpectedly high | Confirm instance type, runtime limit and stop failed/unneeded jobs |
+| HuggingFace 401/403 | Token is missing, expired, or lacks read access to the dataset or model repo |
+| LeRobot argument or configuration error | Check LeRobot v0.6.1 API and model-specific `train.sh` |
+| CUDA OOM | Reduce batch size, choose a larger GPU, or adjust model-specific settings |
+| Missing checkpoints | Check actual model output path, checkpoint creation, and SageMaker sync logs |
+| No final `model.tar.gz` | Inspect job status, errors, runtime, and `/opt/ml/model` contents |
+| Job costs unexpectedly high | Confirm instance type, runtime limit, and stop failed or unneeded jobs |
 
 ## 14. Development and handoff standards
 
-- Keep model-specific dependencies in separate Docker images.
-- Keep AWS-launching logic shared in `launch_training.py`.
-- Do not commit secrets, training datasets, videos, virtual environments or checkpoints.
-- Keep the source and dependency versions pinned or reviewed when updating images.
+- Keep model-specific dependencies in each image's `pyproject.toml`.
+- Keep AWS launching logic shared in `launch_training.py`.
+- Do not commit secrets, training datasets, videos, virtual environments, or checkpoints.
+- Keep source and dependency versions pinned or reviewed when updating images.
 - Review changes on a feature branch and merge through your team's normal process.
-- For new models, add a Dockerfile, entrypoint, model config and an explicit compatibility test.
-- Before declaring the workflow production-ready, perform **both** image builds, a compatible-data smoke test, and at least one end-to-end SageMaker run for each model.
+- For new models, add a Dockerfile, entrypoint, model config, and an explicit compatibility test.
+- Before declaring the workflow production-ready, perform both image builds, a compatible-data smoke test, and at least one end-to-end SageMaker run for each model.
 
-**Security and ownership:** Access to this repository, company source code, dataset repositories and AWS resources must be authorized by the organization, even when the GitHub repository is private.
+**Security and ownership:** Access to this repository, company source code, dataset repositories, and AWS resources must be authorized by the organization, even when the GitHub repository is private.

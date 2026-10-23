@@ -1,0 +1,7 @@
+[project]
+name = "smolvla-training"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "lerobot[smolvla,dataset] @ git+https://github.com/huggingface/lerobot.git@v0.6.1",
+]

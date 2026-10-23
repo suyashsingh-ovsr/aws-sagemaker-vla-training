@@ -10,17 +10,16 @@ RUN apt-get update && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-      python3.12 python3.12-dev python3.12-venv python3-pip && \
+      python3.12 python3.12-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN python3.12 -m ensurepip --upgrade && \
-    python3.12 -m pip install --upgrade pip
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-WORKDIR /opt/lerobot
+WORKDIR /opt/training
+COPY docker/smolvla/pyproject.toml .
+RUN uv sync --no-install-project --python 3.12
 
-COPY vendor/lerobot/ .
-
-RUN python3.12 -m pip install -e ".[smolvla,dataset]"
+ENV PATH="/opt/training/.venv/bin:$PATH"
 
 COPY docker/smolvla/train.sh /opt/train.sh
 RUN chmod +x /opt/train.sh

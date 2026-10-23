@@ -16,8 +16,6 @@ if [[ -n "${HF_TOKEN}" ]]; then
     export HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}"
 fi
 
-export PATH="/usr/local/lib/python3.12/dist-packages/bin:/usr/local/bin:${PATH}"
-
 ARGS=(
     "--policy.path=${BASE_MODEL}"
     "--dataset.repo_id=${DATASET_REPO_ID}"
