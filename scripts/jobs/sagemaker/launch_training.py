@@ -110,7 +110,7 @@ def main():
     parser.add_argument(
         "--max-runtime-hours",
         type=positive_int,
-        default=8,
+        default=24,
     )
     parser.add_argument("--dry-run", action="store_true")
 

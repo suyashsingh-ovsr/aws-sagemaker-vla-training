@@ -101,7 +101,7 @@ You can edit these defaults in your own branch, **or override them per job** wit
 | `--image-tag` | Image tag, if using default image URI construction | `v1` |
 | `--job-prefix` | SageMaker job name prefix | `vla-groot-test` |
 | `--volume-size` | SageMaker storage allocation in GB | `100` |
-| `--max-runtime-hours` | Job runtime limit | `8` |
+| `--max-runtime-hours` | Job runtime limit | `24` |
 | `--dry-run` | Print configuration; do **not** create a job | Flag |
 
 **Dataset compatibility matters:** the dataset must use a schema, features, cameras, actions, and annotations that the selected policy can ingest. A dataset that works with GR00T is not automatically valid for SmolVLA. The chosen GPU and batch size also need to fit the model's memory requirements.

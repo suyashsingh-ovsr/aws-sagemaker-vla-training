@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Configurable GR00T training parameters
-DATASET_REPO_ID="${DATASET_REPO_ID:-Suyash44/blue_cylinder_grasp_2}"
+DATASET_REPO_ID="${DATASET_REPO_ID:?DATASET_REPO_ID is required}"
 BASE_MODEL="${BASE_MODEL:-nvidia/GR00T-N1.7-3B}"
 EMBODIMENT_TAG="${EMBODIMENT_TAG:-new_embodiment}"
 STEPS="${STEPS:-20000}"
