@@ -9,7 +9,7 @@ BATCH_SIZE="${BATCH_SIZE:-2}"
 SAVE_FREQ="${SAVE_FREQ:-2000}"
 OUTPUT_DIR="${OUTPUT_DIR:-/opt/ml/checkpoints/output}"
 HF_POLICY_REPO="${HF_POLICY_REPO:-}"
-PUSH_TO_HUB="${PUSH_TO_HUB:-false}"
+PUSH_TO_HUB="${PUSH_TO_HUB:-true}"
 HF_TOKEN="${HF_TOKEN:-}"
 
 if [[ -n "${HF_TOKEN}" ]]; then
